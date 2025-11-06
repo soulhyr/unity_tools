@@ -1,0 +1,282 @@
+using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
+public enum GizmoDrawArrowType
+{
+    Default,
+    Thin,
+    Double,
+    Triple,
+    Solid,
+    Fat,
+    ThreeD,
+}
+
+public static class GizmosExtensions
+{
+    // ─────────────────────────────
+    // 🟦 3D 관련 기즈모
+    // ─────────────────────────────
+    public static class Gizmos3D
+    {
+        /// <summary>
+        /// 3D Wire Arc
+        /// </summary>
+        /// <param name="position">호(arc)를 그릴 중심 위치입니다. 이 점에서부터 반지름만큼 떨어진 곳에 호가 그려집니다.</param>
+        /// <param name="dir">호가 향하는 기준 방향입니다. 호가 이 방향을 중심으로 좌우로 퍼집니다. (즉, 호의 "중앙 방향")</param>
+        /// <param name="anglesRange">호의 총 각도 범위입니다. 예: 90f → 기준 방향에서 좌우로 45도씩 펼쳐진 호</param>
+        /// <param name="radius">호의 반지름입니다. 중심 위치에서 선을 얼마나 멀리 그릴지 결정합니다.</param>
+        /// <param name="color">호와 중심선의 색상입니다. Gizmos.color에 사용됩니다.</param>
+        /// <param name="steps">호를 몇 개의 작은 선분으로 나눌지 결정합니다. 값이 클수록 부드러운 곡선처럼 보이고, 작으면 각져 보입니다.</param>
+        public static void DrawWireArc(Vector3 position, Vector3 dir, float anglesRange, float radius, Color color, int steps = 20)
+        {
+            Gizmos.color = color;
+            if (steps < 1 || radius <= 0f) return;
+
+            float srcAngle = Mathf.Atan2(dir.z, dir.x) * Mathf.Rad2Deg;
+            float stepAngle = anglesRange / steps;
+            Vector3 center = position;
+            float angle = srcAngle - anglesRange * 0.5f;
+
+            Vector3 prev = center + new Vector3(radius * Mathf.Cos(angle * Mathf.Deg2Rad), 0f, radius * Mathf.Sin(angle * Mathf.Deg2Rad));
+            for (int i = 1; i <= steps; i++)
+            {
+                angle += stepAngle;
+                Vector3 curr = center + new Vector3(radius * Mathf.Cos(angle * Mathf.Deg2Rad), 0f, radius * Mathf.Sin(angle * Mathf.Deg2Rad));
+                Gizmos.DrawLine(prev, curr);
+                prev = curr;
+            }
+
+            float leftAngle = srcAngle - anglesRange * 0.5f;
+            float rightAngle = srcAngle + anglesRange * 0.5f;
+            Vector3 left = center + new Vector3(radius * Mathf.Cos(leftAngle * Mathf.Deg2Rad), 0f, radius * Mathf.Sin(leftAngle * Mathf.Deg2Rad));
+            Vector3 right = center + new Vector3(radius * Mathf.Cos(rightAngle * Mathf.Deg2Rad), 0f, radius * Mathf.Sin(rightAngle * Mathf.Deg2Rad));
+            Gizmos.DrawLine(center, left);
+            Gizmos.DrawLine(center, right);
+        }
+
+        /// <summary>
+        /// 3D Arrow - Gizmos
+        /// </summary>
+        /// <param name="pos">화살표 시작 위치</param>
+        /// <param name="dir">화살표가 향하는 방향과 길이</param>
+        /// <param name="color">화살표 색상</param>
+        /// <param name="headLength">화살촉의 길이</param>
+        /// <param name="headAngle">화살촉의 각도 (중심선과 화살촉 선 사이 각도)</param>
+        public static void DrawArrow(Vector3 pos, Vector3 dir, Color color, float headLength = 0.2f, float headAngle = 20f)
+        {
+            Gizmos.color = color;
+            Gizmos.DrawRay(pos, dir);
+
+            Vector3 right = Quaternion.LookRotation(dir) * Quaternion.Euler(0, 180 + headAngle, 0) * Vector3.forward;
+            Vector3 left = Quaternion.LookRotation(dir) * Quaternion.Euler(0, 180 - headAngle, 0) * Vector3.forward;
+
+            Gizmos.DrawRay(pos + dir, right * headLength);
+            Gizmos.DrawRay(pos + dir, left * headLength);
+        }
+
+        /// <summary>
+        /// 3D Arrow - Debug
+        /// </summary>
+        /// <param name="pos">화살표 시작 위치</param>
+        /// <param name="dir">화살표 방향 및 길이</param>
+        /// <param name="color">화살표 색상</param>
+        /// <param name="duration">선이 씬에 남아있는 시간 (초)</param>
+        /// <param name="type">화살표 종류 (Default, Triple 등)</param>
+        /// <param name="headLength">화살촉 길이</param>
+        /// <param name="headAngle">화살촉 각도</param>
+        public static void DrawArrowDebug(Vector3 pos, Vector3 dir, Color color, float duration = 0.5f, GizmoDrawArrowType type = GizmoDrawArrowType.Default, float headLength = 0.2f, float headAngle = 30f)
+        {
+            if (dir == Vector3.zero) return;
+
+            duration /= Time.timeScale;
+
+            Vector3 forward = dir.normalized;
+
+            // 씬 뷰 카메라 기준 방향 (Scene 뷰가 2D 모드여도 카메라 방향 확보)
+#if UNITY_EDITOR
+            Vector3 camForward = SceneView.lastActiveSceneView != null
+                ? SceneView.lastActiveSceneView.camera.transform.forward
+                : Vector3.forward;
+#else
+            Vector3 camForward = Vector3.forward;
+#endif
+
+            // 화살촉을 카메라 기준으로 약간 비틀기
+            Vector3 right = Quaternion.LookRotation(forward, camForward) * Quaternion.Euler(0, 180 + headAngle, 0) * Vector3.forward;
+            Vector3 left = Quaternion.LookRotation(forward, camForward) * Quaternion.Euler(0, 180 - headAngle, 0) * Vector3.forward;
+
+            // 화살촉
+            Debug.DrawRay(pos + dir, right * headLength, color, duration);
+            Debug.DrawRay(pos + dir, left * headLength, color, duration);
+
+            // 화살 몸통
+            switch (type)
+            {
+                case GizmoDrawArrowType.Default:
+                    Debug.DrawRay(pos, dir, color, duration);
+                    break;
+
+                case GizmoDrawArrowType.Triple:
+                    float width = 0.01f;
+                    Vector3 directlyRight = Quaternion.LookRotation(forward) * Quaternion.Euler(0, 270, 0) * Vector3.forward;
+                    Vector3 directlyLeft  = Quaternion.LookRotation(forward) * Quaternion.Euler(0, 90, 0) * Vector3.forward;
+
+                    Debug.DrawRay(pos, dir, color, duration);
+                    Debug.DrawRay(pos + directlyRight * width, dir * (1 - width), color, duration);
+                    Debug.DrawRay(pos + directlyLeft  * width, dir * (1 - width), color, duration);
+                    break;
+            }
+        }
+
+        public static void RandomStar(Vector3 center, Color color, int rays = 2, float headLength = 0.1f, float headAngle = 30f)
+        {
+            if (center == Vector3.zero) return;
+
+            for (int i = 0; i < rays; i++)
+            {
+                Vector3 randomDir = Random.onUnitSphere;
+                Gizmos3D.DrawArrow(center, randomDir, color, headLength, headAngle);
+            }
+        }
+
+        public static void ComparePositions(Transform t1, Transform t2, Color color, float duration = 0.5f, GizmoDrawArrowType type = GizmoDrawArrowType.Default)
+        {
+            Vector3 dir = t2.position - t1.position;
+            Gizmos3D.DrawArrowDebug(t1.position, dir, color, duration, type);
+        }
+    }
+
+    // ─────────────────────────────
+    // 🟩 2D 관련 기즈모
+    // ─────────────────────────────
+    public static class Gizmos2D
+    {
+        /// <summary>
+        /// 2D Wire Arc
+        /// </summary>
+        /// <param name="position">호(arc)를 그릴 중심 위치입니다. 이 점에서부터 반지름만큼 떨어진 곳에 호가 그려집니다.</param>
+        /// <param name="dir">호가 향하는 기준 방향입니다. 호가 이 방향을 중심으로 좌우로 퍼집니다. (즉, 호의 "중앙 방향")</param>
+        /// <param name="anglesRange">호의 총 각도 범위입니다. 예: 90f → 기준 방향에서 좌우로 45도씩 펼쳐진 호</param>
+        /// <param name="radius">호의 반지름입니다. 중심 위치에서 선을 얼마나 멀리 그릴지 결정합니다.</param>
+        /// <param name="color">호와 중심선의 색상입니다. Gizmos.color에 사용됩니다.</param>
+        /// <param name="steps">호를 몇 개의 작은 선분으로 나눌지 결정합니다. 값이 클수록 부드러운 곡선처럼 보이고, 작으면 각져 보입니다.</param>
+        public static void DrawWireArc(Vector2 position, Vector2 dir, float anglesRange, float radius, Color color, int steps = 20)
+        {
+            Gizmos.color = color;
+            if (steps < 1 || radius <= 0f) return;
+
+            float srcAngle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+            float stepAngle = anglesRange / steps;
+            Vector3 center = new Vector3(position.x, position.y, 0f);
+            float angle = srcAngle - anglesRange * 0.5f;
+
+            Vector3 prev = center + new Vector3(radius * Mathf.Cos(angle * Mathf.Deg2Rad), radius * Mathf.Sin(angle * Mathf.Deg2Rad), 0f);
+            for (int i = 1; i <= steps; i++)
+            {
+                angle += stepAngle;
+                Vector3 curr = center + new Vector3(radius * Mathf.Cos(angle * Mathf.Deg2Rad), radius * Mathf.Sin(angle * Mathf.Deg2Rad), 0f);
+                Gizmos.DrawLine(prev, curr);
+                prev = curr;
+            }
+
+            float leftAngle = srcAngle - anglesRange * 0.5f;
+            float rightAngle = srcAngle + anglesRange * 0.5f;
+            Vector3 left = center + new Vector3(radius * Mathf.Cos(leftAngle * Mathf.Deg2Rad), radius * Mathf.Sin(leftAngle * Mathf.Deg2Rad), 0f);
+            Vector3 right = center + new Vector3(radius * Mathf.Cos(rightAngle * Mathf.Deg2Rad), radius * Mathf.Sin(rightAngle * Mathf.Deg2Rad), 0f);
+            Gizmos.DrawLine(center, left);
+            Gizmos.DrawLine(center, right);
+        }
+
+        /// <summary>
+        /// 2D Arrow - Gizmos
+        /// </summary>
+        /// <param name="pos">화살표 시작 위치</param>
+        /// <param name="dir">화살표가 향하는 방향과 길이</param>
+        /// <param name="color">화살표 색상</param>
+        /// <param name="headLength">화살촉의 길이</param>
+        /// <param name="headAngle">화살촉의 각도 (중심선과 화살촉 선 사이 각도)</param>
+        public static void DrawArrow(Vector2 pos, Vector2 dir, Color color, float headLength = 0.2f, float headAngle = 20f)
+        {
+            Gizmos.color = color;
+            Vector3 position = new Vector3(pos.x, pos.y, 0f);
+            Vector3 direction = new Vector3(dir.x, dir.y, 0f);
+            Gizmos.DrawLine(position, position + direction);
+
+            Vector2 dirNorm = dir.normalized;
+            float angleRad = Mathf.Deg2Rad * headAngle;
+
+            Vector3 right = new Vector3(
+                Mathf.Cos(Mathf.Atan2(dirNorm.y, dirNorm.x) + Mathf.PI - angleRad),
+                Mathf.Sin(Mathf.Atan2(dirNorm.y, dirNorm.x) + Mathf.PI - angleRad),
+                0f
+            ) * headLength;
+
+            Vector3 left = new Vector3(
+                Mathf.Cos(Mathf.Atan2(dirNorm.y, dirNorm.x) + Mathf.PI + angleRad),
+                Mathf.Sin(Mathf.Atan2(dirNorm.y, dirNorm.x) + Mathf.PI + angleRad),
+                0f
+            ) * headLength;
+
+            Gizmos.DrawLine(position + direction, position + direction + right);
+            Gizmos.DrawLine(position + direction, position + direction + left);
+        }
+
+        /// <summary>
+        /// 2D Arrow - Debug
+        /// </summary>
+        /// <param name="pos">화살표 시작 위치</param>
+        /// <param name="dir">화살표 방향 및 길이</param>
+        /// <param name="color">화살표 색상</param>
+        /// <param name="duration">선이 씬에 남아있는 시간 (초)</param>
+        /// <param name="type">화살표 종류 (Default, Triple 등)</param>
+        /// <param name="headLength">화살촉 길이</param>
+        /// <param name="headAngle">화살촉 각도</param>
+        public static void DrawArrowDebug(Vector2 pos, Vector2 dir, Color color, float duration = 0.5f, float headLength = 0.2f, float headAngle = 20f)
+        {
+            Color actualColor = color;
+            duration /= Time.timeScale;
+
+            Vector3 position = new Vector3(pos.x, pos.y, 0f);
+            Vector3 direction = new Vector3(dir.x, dir.y, 0f);
+            Debug.DrawLine(position, position + direction, actualColor, duration);
+
+            Vector2 dirNorm = dir.normalized;
+            float angleRad = Mathf.Deg2Rad * headAngle;
+
+            Vector3 right = new Vector3(
+                Mathf.Cos(Mathf.Atan2(dirNorm.y, dirNorm.x) + Mathf.PI - angleRad),
+                Mathf.Sin(Mathf.Atan2(dirNorm.y, dirNorm.x) + Mathf.PI - angleRad),
+                0f
+            ) * headLength;
+
+            Vector3 left = new Vector3(
+                Mathf.Cos(Mathf.Atan2(dirNorm.y, dirNorm.x) + Mathf.PI + angleRad),
+                Mathf.Sin(Mathf.Atan2(dirNorm.y, dirNorm.x) + Mathf.PI + angleRad),
+                0f
+            ) * headLength;
+
+            Debug.DrawLine(position + direction, position + direction + right, actualColor, duration);
+            Debug.DrawLine(position + direction, position + direction + left, actualColor, duration);
+        }
+        
+        public static void RandomStar(Vector2 center, Color color, int rays = 2, float headLength = 0.1f, float headAngle = 30f)
+        {
+            if (center == Vector2.zero) return;
+
+            for (int i = 0; i < rays; i++)
+            {
+                Vector2 randomDir = Random.insideUnitCircle.normalized;
+                Gizmos2D.DrawArrow(center, randomDir, color, headLength, headAngle);
+            }
+        }
+
+        public static void ComparePositions(Transform t1, Transform t2, Color color, float duration = 0.5f)
+        {
+            Vector2 dir = (Vector2)(t2.position - t1.position);
+            Gizmos2D.DrawArrowDebug(t1.position, dir, color, duration);
+        }
+    }
+}
